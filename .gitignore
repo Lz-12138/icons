@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 构建产物
+dist/
+.build-work/
+artifact/
+*.app/
+
+# 由 build/make_icns.py 从 app/1.ico 生成，不进仓库
+resources/icon.icns
+
+.DS_Store
+*.egg-info/

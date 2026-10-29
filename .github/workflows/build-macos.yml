@@ -1,0 +1,85 @@
+name: Build macOS .app
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch: # 也可以在网页上手动点「Run workflow」
+
+env:
+  APP_NAME: IconStudio # ← 和 build/app.spec 里的 APP_NAME 保持一致
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  build:
+    name: ${{ matrix.arch }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14 # Apple 芯片 arm64
+            arch: arm64
+          - runner: macos-15-intel # Intel x86_64（macos-13 已被 GitHub 退役）
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 缓存 pip
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/pip
+          key: ${{ runner.os }}-${{ matrix.arch }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: 构建 .app
+        run: bash build/build-macos.sh
+
+      - name: 打包 zip（ditto 能保留可执行位和签名信息，别用普通 zip）
+        run: |
+          mkdir -p artifact
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/${{ env.APP_NAME }}.app" \
+            "artifact/${{ env.APP_NAME }}-${{ matrix.arch }}.zip"
+          ls -lh artifact
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ matrix.arch }}
+          path: artifact/*.zip
+          if-no-files-found: error
+
+      # ---------- 可选：有 Apple Developer ID 时正式签名 + 公证 ----------
+      # 在仓库 Settings → Secrets 里配好下面 5 个值，并解开注释即可。
+      #
+      # - name: 导入签名证书
+      #   if: ${{ secrets.MACOS_CERT_P12 != '' }}
+      #   env:
+      #     CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      #     CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      #   run: |
+      #     echo "$CERT_P12" | base64 --decode > /tmp/cert.p12
+      #     security create-keychain -p actions build.keychain
+      #     security default-keychain -s build.keychain
+      #     security unlock-keychain -p actions build.keychain
+      #     security import /tmp/cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+      #
+      # - name: 签名并公证
+      #   if: ${{ secrets.MACOS_CERT_P12 != '' }}
+      #   env:
+      #     APPLE_ID: ${{ secrets.APPLE_ID }}
+      #     APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      #     APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      #   run: |
+      #     APP="dist/${{ env.APP_NAME }}.app"
+      #     IDENT=$(security find-identity -v -p codesigning build.keychain | awk 'NR==1{print $2}')
+      #     MACOS_SIGN_IDENTITY="$IDENT" bash build/build-macos.sh
+      #     ditto -c -k --keepParent "$APP" /tmp/notarize.zip
+      #     xcrun notarytool submit /tmp/notarize.zip --apple-id "$APPLE_ID" \
+      #       --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+      #     xcrun stapler staple "$APP"

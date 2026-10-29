@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PyInstaller 打包的程序把 Python 解释器打进了包里，用 hardened runtime 正式签名时
+  必须放开这几项，否则启动即闪退（JIT / 无签名内存 / 动态库校验）。
+  只在「正式签名 + 公证」时才真正起作用；本机 ad-hoc 签名不会用到。
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,6 @@
+# 打包工具（CI 与本地都读这个文件）
+pyinstaller>=6.6,<7
+
+# app/main.py 的运行时依赖
+pillow>=10.0
+pyqt6>=6.6
